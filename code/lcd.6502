@@ -1,0 +1,48 @@
+portb	equ	$6000
+porta	equ	$6001
+ddrb    equ    $6002
+ddra    equ	$6003
+
+E       equ    %10000000
+RW      equ    %01000000
+RS	equ	%00100000
+
+
+
+        macro LCDdo
+        lda     \1
+        jsr     lcdcmd
+        endm
+
+lcdinit
+	lda	#%11111111	; set all pins on port b to output
+	sta	ddrb
+	lda	#%11100000	; set top 3 pins on port a to output
+	sta	ddra
+
+        LCDdo   #%00111000
+        LCDdo   #%00001110
+        LCDdo   #%00000110
+        LCDdo   #%00000001
+	rts
+
+lcdcmd
+	sta	portb
+	lda	#$0		; clear RS/RW/E bits
+	sta	porta
+	lda	#E		; set enable to send instruction
+	sta	porta
+	lda	#$0		; clear RS/RW/E bits
+	sta	porta
+	rts
+
+lcdchar
+	sta	portb
+	lda	#RS		; clear RW/E bits, set RS=1
+	sta	porta
+	lda	#(RS | E)	; set enable to send instruction
+	sta	porta
+	lda	#RS		; clear RW/E bits, set RS=1
+	sta	porta
+	rts
+
