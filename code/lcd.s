@@ -1,48 +1,49 @@
-portb	equ	$6000
-porta	equ	$6001
-ddrb    equ    $6002
-ddra    equ	$6003
+; Basic output to LED
 
-E       equ    %10000000
-RW      equ    %01000000
-RS	equ	%00100000
+PORTB	=	$6000
+PORTA	=	$6001
+DDRB    =   $6002
+DDRA   	=	$6003
 
+E       =   %10000000
+RW      =   %01000000
+RS		=	%00100000
 
-
-        macro LCDdo
+	.macro LCDdo
         lda     \1
         jsr     lcdcmd
-        endm
+	.endm
 
 lcdinit
 	lda	#%11111111	; set all pins on port b to output
-	sta	ddrb
+	sta	DDRB
 	lda	#%11100000	; set top 3 pins on port a to output
-	sta	ddra
+	sta	DDRA
 
-        LCDdo   #%00111000
-        LCDdo   #%00001110
-        LCDdo   #%00000110
-        LCDdo   #%00000001
+	LCDdo   #%00111000
+	LCDdo   #%00001110
+	LCDdo   #%00000110
+	LCDdo   #%00000001
 	rts
 
 lcdcmd
-	sta	portb
+	sta	PORTB
+
 	lda	#$0		; clear RS/RW/E bits
-	sta	porta
+	sta	PORTA
 	lda	#E		; set enable to send instruction
-	sta	porta
+	sta	PORTA
 	lda	#$0		; clear RS/RW/E bits
-	sta	porta
+	sta	PORTA
 	rts
 
 lcdchar
-	sta	portb
-	lda	#RS		; clear RW/E bits, set RS=1
-	sta	porta
-	lda	#(RS | E)	; set enable to send instruction
-	sta	porta
-	lda	#RS		; clear RW/E bits, set RS=1
-	sta	porta
-	rts
+	sta	PORTB
 
+	lda	#RS		; clear RW/E bits, set RS=1
+	sta	PORTA
+	lda	#(RS | E)	; set enable to send instruction
+	sta	PORTA
+	lda	#RS		; clear RW/E bits, set RS=1
+	sta	PORTA
+	rts

@@ -2,10 +2,10 @@
 ; Show text on LED screen
 ; ******************************************************
 
-    org $8000
-romstart
+    .org $8000
 
-	org	$fffc
-	word	$0200
-	word	$0000
+romstart
+	.org	$fffc
+	.word	$0200
+	.word	$0000
 

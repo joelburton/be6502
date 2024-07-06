@@ -2,7 +2,7 @@
 ; Show text on LED screen
 ; ******************************************************
 
-	org	$0200
+	.org	$8000
 
 start
 	jsr	lcdinit
@@ -18,6 +18,11 @@ loop
 	jmp	loop
 
 msgtext
-	ascii	"HEY YOU :-)"
+	.asciiz	"HI JOEL :-)"
 
-	include lcd.6502
+	.include lcd.s
+
+	.org	$fffc
+	.word	start
+	.word	$0000
+
