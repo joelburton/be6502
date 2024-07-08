@@ -4,11 +4,20 @@
 %.hex: %.s
 	../tools/vasm6502_oldstyle_macho_x86_64 -Fihex -wdc02 -L $*.lst -o $@ -dotdir $<
 
-%.up: %.hex
-	python3 ../tools/upload.py $<
+%.external: %.hex
+	python3 ../tools/upload.py $< external
 
-msg.s: blink.s lcd.s
-blink.s: lcd.s
+%.auto: %.hex
+	python3 ../tools/upload.py $< auto
+
+%.manual: %.hex
+	python3 ../tools/upload.py $< manual
+
+%.rom: %.bin
+	minipro -w $< -p 28C256
+
+msg.bin: msg.s blink.s lcd.s
+msg.hex: msg.s blink.s lcd.s
 
 clean:
 	rm -f *.lst *.bin *.hex
