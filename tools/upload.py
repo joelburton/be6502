@@ -15,7 +15,7 @@ import os
 port = os.environ.get("SERIAL_PORT", "/dev/tty.usbmodem14101")
 
 ser = serial.Serial(port, 115200, timeout=0.1)
-time.sleep(0.8)
+time.sleep(1.4)
 
 def wr_rd(s):
     # Write a line to the serial port and print out a line from it.

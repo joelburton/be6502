@@ -1,8 +1,10 @@
+SERIAL_PORT ?= /dev/tty.usbmodem14101
+
 %.bin: %.s
-	../tools/vasm6502_oldstyle_macho_x86_64 -Fbin -wdc02 -L $*.lst -o $@ -dotdir $<
+	vasm6502_oldstyle -Fbin -wdc02 -L $*.lst -o $@ -dotdir $<
 
 %.hex: %.s
-	../tools/vasm6502_oldstyle_macho_x86_64 -Fihex -wdc02 -L $*.lst -o $@ -dotdir $<
+	vasm6502_oldstyle -Fihex -wdc02 -L $*.lst -o $@ -dotdir $<
 
 %.external: %.hex
 	python3 ../tools/upload.py $< external
@@ -18,6 +20,9 @@
 
 msg.bin: msg.s blink.s lcd.s
 msg.hex: msg.s blink.s lcd.s
+
+term:
+	picocom $(SERIAL_PORT) -q --omap delbs -b 115200
 
 clean:
 	rm -f *.lst *.bin *.hex
