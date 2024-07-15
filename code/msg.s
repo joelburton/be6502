@@ -32,3 +32,5 @@ msgtext
 
 	.include lcd.s
 	.include blink.s
+
+	.end
