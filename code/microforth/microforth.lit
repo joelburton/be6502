@@ -1,0 +1,105 @@
+# Forth on a 65c02
+
+Our overall program will look something like this.
+
+--- /microforth.s
+@{initialize conveniently-named variables}
+@{initialize the hardware stack}
+@{initialize a software stack}
+@{initialize forth data structures, like the return stack and dictionary}
+---
+
+A quick reminder of what our ROM looks like.
+
+--- rom
+; ******************************************************
+; Set vectors for ROM to call RAM
+; ******************************************************
+
+; Since it's a pain to reprogram the ROM, most of the time it's easier to
+; put code in RAM. Since the 6502 looks for the vectors for nmi/reset/irq in
+; ROM, this file needs to be burned in the ROM.
+
+; This assumes the ROM is 32k and starts at $8000 --- the 6502 needs to find
+; the vectors at $FFFA
+
+	.org	$8000
+
+; This will leave 32k-6 bytes at $00 and then sets these
+
+	.org	$fffa
+vector_nmi
+	.word   $3000  ; NMI fn could be at $3000
+vector_reset
+	.word	$0200  ; after reset, start at $0200 (lowest RAM)
+vector_irq
+	.word	$3800  ; IRQ fn could be at $3800
+---
+
+So... our code starts at `$0200`. (The processor stack is located on memory page #1, `$0100`-`$01FF`.)
+
+The hardware stack pointer will start at some random value between `$0100` and `$01FF` and wrap around. That random starting point will make things hard to debug, so we'll use the `txs` instruction to set the stack pointer to the value we put in the `x` register, making `$0100` the address of the first thing to go on the stack.
+
+--- initialize the hardware stack
+    ldx #$FF
+    txs
+---
+
+We're also going to be working with a software stack in the zero page.
+
+TODO: Explain details/reasoning. It comes from [SECND](https://github.com/dourish/secnd/blob/master/secnd1.a65#L58)
+
+--- initialize a software stack
+stackaccess = $0080
+stackbase   = $0000
+    ldx #$FF
+@{stack operations}
+---
+
+The initialization is simple. The stack is indexed by the `x` register, lives in the top half of the zero page, and grows downward. That means it starts at `$00FF` (the top half of the zero page) and grows towards $0080.
+
+Because the stack is indexed by the `x` register, this means that you can't lose its value. If you need to do something with the `x` register, you'll need to wrap your work in a `phx` ... `plx`.
+
+--- stack operations
+push16
+    lda stackaccess+1       ; first byte (big end)
+    sta stackbase,x
+    dex
+    lda stackaccess         ; second byte (little end)
+    sta stackbase,x
+    dex
+    rts
+---
+
+A note from the SECND codebase that I'm still trying to understand:
+
+    ;; We push the big end first, so that the data is on the stack in little-
+    ;; endian format, which means we can do indirect addressing directly
+    ;; through objects on the stack.
+
+Ok... let me visualize this.
+
+    0x00FC
+    0x00FD
+    0x00FE      34
+    0x00FF      12  ;; We push the address 1234 on the stack
+
+Ah. I had to read a page that described indirect addressing. [See here](https://www.nesdev.org/obelisk-6502-guide/addressing.html#:~:text=Indirect%20indirect%20addressing%20is%20the%20most%20common%20indirection,LDA%20%28%2440%29%2CY%20%3BLoad%20a%20byte%20indirectly%20from%20memory).
+
+    Indirect
+    JMP is the only 6502 instruction to support indirection. The instruction contains a 16 bit address which identifies the location of the least significant byte of another 16 bit memory address which is the real target of the instruction.
+    For example if location $0120 contains $FC and location $0121 contains $BA then the instruction JMP ($0120) will cause the next instruction execution to occur at $BAFC (e.g. the contents of $0120 and $0121).
+
+So, given the above stack layout, `JMP ($0x00FE)` would jump to address 1234.
+
+--- stack operations +=
+pop16
+                            ; remember, stackbase,x points to the next available slot.
+    lda stackbase+1,x       ; the little end
+    sta stackaccess
+    inx
+    lda stackbase+1,x       ; the second byte
+    sta stackaccess+1
+    inx
+    rts
+---
