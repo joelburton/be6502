@@ -1,12 +1,13 @@
-index.html: microforth.lit
+index.html: index.lit
 	srcweave \
 		--tangle dist \
-		--weave docs/ \
+		--weave docs \
 		--styler srcweave-html-styler \
-		microforth.lit
+		index.lit \
+		gamepad.lit
 
 init: FORCE
-	srcweave-html-styler-init docs/
+	srcweave-html-styler-init docs \
 	mkdir -p dist
 
 deploy: FORCE

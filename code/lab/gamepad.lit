@@ -1,0 +1,121 @@
+# Gamepad
+
+## Not using interrupts
+
+Start simple. Make sure we understand reading from one peripheral and writing to another.
+
+In a loop:
+
+1. Read the value of each gamepad button.
+2. Write each value to the display.
+
+## Reading the value of a gamepad button
+
+### How do we read the value of the middle button?
+
+```
+PA0 ----- MIDDLE
+PA1 ----- UP
+PA2 ----- DOWN
+PA3 ----- LEFT
+PA4 ----- RIGHT
+```
+
+How do we read the value of PA0?
+
+~~The signal is going to be on the data bus. It will hit the VIA (the WD65C22) on pin 2.~~
+
+How do we tell the VIA to "latch" that value, so that we can read it at some point in the future? ~~For that matter, _must_ we tell the VIA to latch the value? If it's on the bus and we are using the value immediately, can the MPU just read it directly?~~
+
+~~For the sake of doing things the way they are likely to be done in other future situations, I'll stick with communicating through the VIA. But let's leave it as a TODO to come back and test our understanding.~~
+
+~~TODO: Try bypassing the VIA and reading directly from A...~~
+
+Ohhhh. `PA0` is _not_ on the bus. `D0` is on the bus. Pins on one side of the VIA are the peripheral port pins. Pins on the _other_ side are the bus pins.
+
+Ok. So. We set the VIA to read from it's `B` port. It's possible to set per-pin-level read/write. For now, for this first experiment, we only need to read 1 pin, the `PA0` "middle" pin. But it doesn't really matter. We'll probably set all of them to read and just pick the one we want when it's time to do the display logic.
+
+#### Latching
+
+Each port has input latching capability. Must we use that capability? What does it really mean?
+
+> When reading the Peripheral Port (PA or PB), the contents of the corresponding
+> Input Register (IRA or IRB) is transferred onto the Data Bus. When the input
+> latching feature is disabled, IRA will reflect the logic levels present on the
+> PA bus pins. However, with input latching enabled and the selected active
+> transition on Peripheral A Control 1 (CA1) having occurred, IRA will contain the
+> data present on the PA bus lines at the time of the transition. In this case,
+> once IRA has been read, it will appear transparent, reflecting the current state
+> of the PA bus pins until the next CA1 latching transition.
+
+It sounds like this is kind of related to the strikethroughed text above. With input latching disabled, the values on `PA0` are _passed through_ to `D0`. Since we're just experimenting, passthrough is all we need.
+
+How would you set latching enabled if you wanted to? With the Auxiliary Control Register. It's at memory address $0B. If the lowest bit of that register is 1, then port `A` latching is enabled. The second lowest bit controls `B`.
+
+#### Data direction registers
+
+See page 8 of the w65c22 datasheet.
+
+> Both PA and PB operate in conjunction with a Data Direction Register (DDRA or
+> DDRB). Under program control, the DDRA and DDRB specify which pins within the
+> port bus are to be designated as inputs or outputs. Logic 0 in any bit
+> position of the register will cause the corresponding pin to serve as an
+> input; while a logic 1 will cause the pin to serve as an output.
+
+### The code to set the VIA to read from port `A`.
+
+See the table on page 8 of the WD65C22 datasheet.
+
+Writing `1` to `DDRA` (address 0x03 of the VIA) sets it to input mode. Then, writing 0 to any pin will set that pin to input mode.
+
+--- /gamepad.s
+lda #$01
+sta $6003
+---
+
+### The code to read the value from port `A`.
+
+Since we're not waiting on any handshake, data ready, or latch, then we can just start reading straight from the memory address.
+
+The only thing we need to consider, I think, is the "bus enable" pin on the MPU.
+
+> The Bus Enable (BE) input signal provides external control of the Address,
+> Data and the RWB buffers. When Bus Enable is high, the Address, Data and RWB
+> buffers are active. When BE is low, these buffers are set to the high
+> impedance status. Bus Enable is an asynchronous signal.
+
+Oh. And the RWB pin.
+
+> The Read/Write (RWB) output signal is used to control data transfer. When in
+> the high state, the microprocessor is reading data from memory or I/O. When in
+> the low state, the Data Bus contains valid data to be written from the
+> microprocessor and stored at the addressed memory or I/O location. The RWB
+> signal is set to the high impedance state when Bus Enable (BE) is low.
+
+So. `BE` high and `RWB` high.
+
+Where is `BE`? I don't see it anywhere on the schematics from [https://github.com/tebl/BE6502-Build-a-65c02-computer](https://github.com/tebl/BE6502-Build-a-65c02-computer).
+
+I had the thought that maybe it was just _always_ high. Maybe that was the way Ben Eater designed it. Maybe we never _need_ it to be low, for basic use.
+
+If that were the case, then maybe the code of the 6502 monitor would point me to how/where it's handled.
+
+Sure enough. The monitor writes to [Digital Pin 4](https://github.com/tebl/BE6502-Build-a-65c02-computer/blob/4ca727ed6329626ecbd858c24cd1ece420efed22/software/arduino/6502-monitor/6502-monitor/constants.h#L12) of the Arduino when it wants to change the `BE` pin. Using the KiCad schematics, I tracked digital pin 4 of the arduino down to a wire labeled "Pin 21". That's it. It's not actually labeled `BE` anywhere. Just "Pin 21".
+
+Anyways... we don't need to muck with `BE`. The only reason to do so would be if you want something _other than_ the 6502 to read/write from something on the data bus. The only possible thing that _could_ do that, in our case, is the Arduino. And that's only in monitor mode. It's useful for doing things like dumping RAM.
+
+Ok. So. Long story short: we only need `RWB` high.
+
+EDIT: Ohhhh. Noooo. `RWB` is kind of a "read-only" pin. It's just the processor telling you whether it's reading or writing. See [Ben Eater's first video at 17:00](https://youtu.be/LnzuMJLZRdU?list=PLowKtXNTBypFbtuVMUVXNR0z1mu7dp7eH&t=1036).
+
+Duh. It says right there on page 10 of the [6502 datasheet](file:///home/eihli/src/be6502/datasheets/w65c02s.pdf). "The Read/Write (RWB) _*output*_ signal..."
+
+God all mighty. Ok.
+
+So.
+
+Bus Enable is always high. RWB is output. What do we need to do to read from Port A? Just fucking read it.
+
+--- /gamepad.s +=
+lda $6001
+---
